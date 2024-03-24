@@ -135,6 +135,36 @@ class CircularSelectorView(
         }
     }
 
+    override fun onTouchEvent(event: MotionEvent?): Boolean {
+        if (event == null || options.size !in 2..20) return false
+        val touchX = event.x
+        val touchY = event.y
+        if (safeRect.contains(touchX.toInt(), touchY.toInt())) {
+            log("X = $touchX")
+            log("Y = $touchY")
+
+
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    val angle = (Math.toDegrees(
+                        atan2(
+                            touchY - safeRect.centerY(),
+                            touchX - safeRect.centerX()
+                        ).toDouble()
+                    ) + 360) % 360
+
+                    val position = (angle / (360 / options.size)).toInt()
+                    log("угол = $angle, position = $position")
+                    selectedOption = position
+                }
+
+                MotionEvent.ACTION_UP -> {
+
+                }
+            }
+        }
+        return false
+    }
 
     data class SelectionItem(
         @DrawableRes val image: Int,
