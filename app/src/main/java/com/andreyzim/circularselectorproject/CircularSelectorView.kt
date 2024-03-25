@@ -2,6 +2,7 @@ package com.andreyzim.circularselectorproject
 
 import android.animation.Animator
 import android.animation.ValueAnimator
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -23,6 +24,7 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
 
+
 class CircularSelectorView(
     context: Context,
     attributeSet: AttributeSet?,
@@ -32,10 +34,14 @@ class CircularSelectorView(
 
     private val paint = Paint()
     private val iconsPaint = Paint()
-    private val colorGenerator = RandomColorGenerator()
     private val safeRect = Rect()
     private val unselectedRect = Rect()
-    private var selectedOption = -1
+    private val listeners = mutableListOf<OnOptionSelectedListener>()
+    private var selectedOptionId = -1
+        set(value) {
+            field = value
+            invokeListeners(field)
+        }
     var options: List<SelectionItem> = emptyList()
         set(value) {
             field = value
@@ -43,6 +49,7 @@ class CircularSelectorView(
         }
     private val animatedRectMap = mutableMapOf<Int, Rect>()
     private val valueAnimatorsMap = mutableMapOf<Int, ValueAnimator>()
+    private val animationInterpolator = FastOutSlowInInterpolator()
 
     constructor(context: Context, attributeSet: AttributeSet?, defStyleAttr: Int) : this(
         context,
@@ -56,8 +63,6 @@ class CircularSelectorView(
 
     init {
         paint.style = Paint.Style.FILL
-        paint.color = Color.LTGRAY
-
         iconsPaint.style = Paint.Style.FILL
         iconsPaint.color = Color.BLACK
 
@@ -158,44 +163,39 @@ class CircularSelectorView(
     }
 
     private fun getRectByPosition(position: Int): Rect =
-        animatedRectMap[position] ?: if (position == selectedOption) safeRect else unselectedRect
+        animatedRectMap[position] ?: if (position == selectedOptionId) safeRect else unselectedRect
 
-
-    // TODO override perform click
+    @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         if (event == null || options.size !in 2..20) return false
-        val touchX = event.x
-        val touchY = event.y
-        if (safeRect.contains(touchX.toInt(), touchY.toInt())) {
-            log("X = $touchX")
-            log("Y = $touchY")
 
-
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    val angle = (Math.toDegrees(
-                        atan2(
-                            touchY - safeRect.centerY(),
-                            touchX - safeRect.centerX()
-                        ).toDouble()
-                    ) + 360) % 360
-                    val position = (angle / (360 / options.size)).toInt()
-                    log("угол = $angle, position = $position")
-                    val rect = getRectByPosition(position)
-                    return if (isTouchIsInsideArc(touchX, touchY, rect)) {
-                        if (selectedOption >= 0) startDecreasingAnimation(selectedOption)
-                        selectedOption = if (position == selectedOption) -1 else position
-                        if (selectedOption >= 0) startIncreasingAnimation(selectedOption)
-                        true
-                    } else false
-                }
-
-                MotionEvent.ACTION_UP -> {
-
-                }
+        when (event.action) {
+            MotionEvent.ACTION_DOWN -> {
+                handleTouchEvent(event)
             }
         }
         return false
+    }
+
+    private fun handleTouchEvent(event: MotionEvent): Boolean {
+        val touchX = event.x
+        val touchY = event.y
+        if (safeRect.contains(touchX.toInt(), touchY.toInt())) {
+            val angle = (Math.toDegrees(
+                atan2(
+                    touchY - safeRect.centerY(),
+                    touchX - safeRect.centerX()
+                ).toDouble()
+            ) + 360) % 360
+            val position = (angle / (360 / options.size)).toInt()
+            val rect = getRectByPosition(position)
+            return if (isTouchIsInsideArc(touchX, touchY, rect)) {
+                if (selectedOptionId >= 0) startDecreasingAnimation(selectedOptionId)
+                selectedOptionId = if (position == selectedOptionId) -1 else position
+                if (selectedOptionId >= 0) startIncreasingAnimation(selectedOptionId)
+                true
+            } else false
+        } else return false
     }
 
     private fun isTouchIsInsideArc(touchX: Float, touchY: Float, arcRect: Rect): Boolean {
@@ -227,25 +227,16 @@ class CircularSelectorView(
             .ofFloat(0F, SELECTED_ARC_RADIUS_DIFF)
             .apply {
                 duration = 300
-                interpolator = FastOutSlowInInterpolator()
+                interpolator = animationInterpolator
                 addUpdateListener {
                     val value = it.animatedValue as Float
                     animatedRectMap[index]?.increase(value)
                     invalidate()
                 }
-                addListener(object: Animator.AnimatorListener {
-                    override fun onAnimationStart(animation: Animator) {}
-
-                    override fun onAnimationEnd(animation: Animator) {
-                        animatedRectMap.remove(index)
-                        valueAnimatorsMap.remove(index)
-                        invalidate()
-                    }
-
-                    override fun onAnimationCancel(animation: Animator) {}
-
-                    override fun onAnimationRepeat(animation: Animator) {}
-                })
+                addEndListener {
+                    animatedRectMap.remove(index)
+                    valueAnimatorsMap.remove(index)
+                }
                 start()
             }
     }
@@ -262,28 +253,51 @@ class CircularSelectorView(
             .ofFloat(SELECTED_ARC_RADIUS_DIFF, 0F)
             .apply {
                 duration = 300
-                interpolator = FastOutSlowInInterpolator()
+                interpolator = animationInterpolator
                 addUpdateListener {
                     val value = it.animatedValue as Float
                     animatedRectMap[index]?.increase(value)
                     invalidate()
                 }
-                addListener(object: Animator.AnimatorListener {
-                    override fun onAnimationStart(animation: Animator) {}
-
-                    override fun onAnimationEnd(animation: Animator) {
-                        animatedRectMap.remove(index)
-                        valueAnimatorsMap.remove(index)
-                        invalidate()
-
-                    }
-
-                    override fun onAnimationCancel(animation: Animator) {}
-
-                    override fun onAnimationRepeat(animation: Animator) {}
-                })
+                addEndListener {
+                    animatedRectMap.remove(index)
+                    valueAnimatorsMap.remove(index)
+                }
                 start()
             }
+    }
+
+    interface OnOptionSelectedListener {
+        fun invoke(option: SelectionItem?)
+    }
+
+    fun addOnOptionSelectedListener(block: (SelectionItem?) -> Unit) {
+        listeners.add(object : OnOptionSelectedListener {
+            override fun invoke(option: SelectionItem?) {
+                block.invoke(option)
+            }
+        })
+    }
+
+    private fun invokeListeners(selectedOptionId: Int) {
+        listeners.forEach {
+            if (selectedOptionId >= 0) it.invoke(options[selectedOptionId])
+            else it.invoke(null)
+        }
+    }
+
+    interface AnimatorEndListener: Animator.AnimatorListener {
+        override fun onAnimationCancel(animation: Animator) {}
+        override fun onAnimationRepeat(animation: Animator) {}
+        override fun onAnimationStart(animation: Animator) {}
+    }
+
+    private fun ValueAnimator.addEndListener(block:() -> Unit) {
+        this.addListener(object: AnimatorEndListener {
+            override fun onAnimationEnd(animation: Animator) {
+                block.invoke()
+            }
+        })
     }
 
     // TODO save instance state
@@ -292,10 +306,6 @@ class CircularSelectorView(
         @DrawableRes val image: Int,
         @ColorRes val color: Int,
     )
-
-    private fun log(message: String) {
-        Log.d("CustomView", message)
-    }
 
     private fun Float.toDP() = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP,
