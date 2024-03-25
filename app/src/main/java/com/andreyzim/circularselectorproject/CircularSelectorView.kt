@@ -12,6 +12,7 @@ import android.util.Log
 import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
+import androidx.annotation.ColorRes
 import androidx.annotation.DrawableRes
 import androidx.core.content.ContextCompat
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator
@@ -62,11 +63,11 @@ class CircularSelectorView(
 
         if (isInEditMode) {
             options = listOf(
-                SelectionItem(R.drawable.baseline_10k_24, colorGenerator.generate()),
-                SelectionItem(R.drawable.baseline_123_24, colorGenerator.generate()),
-                SelectionItem(R.drawable.baseline_16mp_24, colorGenerator.generate()),
-                SelectionItem(R.drawable.baseline_1k_24, colorGenerator.generate()),
-                SelectionItem(R.drawable.baseline_app_registration_24, colorGenerator.generate()),
+                SelectionItem(R.drawable.baseline_10k_24, R.color.color4),
+                SelectionItem(R.drawable.baseline_123_24, R.color.color5),
+                SelectionItem(R.drawable.baseline_16mp_24, R.color.color6),
+                SelectionItem(R.drawable.baseline_1k_24, R.color.color7),
+                SelectionItem(R.drawable.baseline_app_registration_24, R.color.color8),
             )
         }
     }
@@ -129,7 +130,7 @@ class CircularSelectorView(
         val iconSize = ICON_SIZE.toDP()
 
         options.forEachIndexed { index, item ->
-            paint.color = item.color
+            paint.color = context.getColor(item.color)
             val rect = getRectByPosition(index)
             canvas.drawArc(
                 rect.left.toFloat(),
@@ -274,6 +275,7 @@ class CircularSelectorView(
                         animatedRectMap.remove(index)
                         valueAnimatorsMap.remove(index)
                         invalidate()
+
                     }
 
                     override fun onAnimationCancel(animation: Animator) {}
@@ -288,7 +290,7 @@ class CircularSelectorView(
 
     data class SelectionItem(
         @DrawableRes val image: Int,
-        val color: Int,
+        @ColorRes val color: Int,
     )
 
     private fun log(message: String) {

@@ -11,8 +11,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
 
-    private val colorGenerator = RandomColorGenerator()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -25,10 +23,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.circularView.options = listOf(
-            CircularSelectorView.SelectionItem(R.drawable.baseline_10k_24, colorGenerator.generate()),
-            CircularSelectorView.SelectionItem(R.drawable.baseline_123_24, colorGenerator.generate()),
-            CircularSelectorView.SelectionItem(R.drawable.baseline_123_24, colorGenerator.generate()),
-            CircularSelectorView.SelectionItem(R.drawable.baseline_16mp_24, colorGenerator.generate()),
+            CircularSelectorView.SelectionItem(R.drawable.baseline_10k_24, R.color.color4),
+            CircularSelectorView.SelectionItem(R.drawable.baseline_123_24, R.color.color7),
+            CircularSelectorView.SelectionItem(R.drawable.baseline_123_24, R.color.color13),
+            CircularSelectorView.SelectionItem(R.drawable.baseline_16mp_24, R.color.color16),
+            CircularSelectorView.SelectionItem(R.drawable.baseline_16mp_24, R.color.color19),
+            CircularSelectorView.SelectionItem(R.drawable.baseline_16mp_24, R.color.color21),
         )
     }
 }
