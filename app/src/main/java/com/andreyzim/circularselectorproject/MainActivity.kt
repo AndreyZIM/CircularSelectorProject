@@ -29,11 +29,6 @@ class MainActivity : AppCompatActivity() {
             CircularSelectorView.SelectionItem(R.drawable.baseline_123_24, colorGenerator.generate()),
             CircularSelectorView.SelectionItem(R.drawable.baseline_123_24, colorGenerator.generate()),
             CircularSelectorView.SelectionItem(R.drawable.baseline_16mp_24, colorGenerator.generate()),
-            CircularSelectorView.SelectionItem(R.drawable.baseline_16mp_24, colorGenerator.generate()),
-            CircularSelectorView.SelectionItem(R.drawable.baseline_16mp_24, colorGenerator.generate()),
-            CircularSelectorView.SelectionItem(R.drawable.baseline_1k_24, colorGenerator.generate()),
-            CircularSelectorView.SelectionItem(R.drawable.baseline_app_registration_24, colorGenerator.generate()),
-            CircularSelectorView.SelectionItem(R.drawable.baseline_app_registration_24, colorGenerator.generate()),
         )
     }
 }

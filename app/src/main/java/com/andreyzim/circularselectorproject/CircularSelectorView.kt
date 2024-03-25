@@ -3,7 +3,6 @@ package com.andreyzim.circularselectorproject
 import android.animation.Animator
 import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -20,6 +19,7 @@ import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.math.sin
 
 class CircularSelectorView(
@@ -40,8 +40,6 @@ class CircularSelectorView(
             field = value
             invalidate()
         }
-    private var selectedOptionRadiusDiff = 0F
-    private val bitmapFactory = BitmapFactory()
     private val animatedRectMap = mutableMapOf<Int, Rect>()
     private val valueAnimatorsMap = mutableMapOf<Int, ValueAnimator>()
 
@@ -132,8 +130,7 @@ class CircularSelectorView(
 
         options.forEachIndexed { index, item ->
             paint.color = item.color
-            val rect =
-                animatedRectMap[index] ?: if (index == selectedOption) safeRect else unselectedRect
+            val rect = getRectByPosition(index)
             canvas.drawArc(
                 rect.left.toFloat(),
                 rect.top.toFloat(),
@@ -159,6 +156,11 @@ class CircularSelectorView(
         }
     }
 
+    private fun getRectByPosition(position: Int): Rect =
+        animatedRectMap[position] ?: if (position == selectedOption) safeRect else unselectedRect
+
+
+    // TODO override perform click
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         if (event == null || options.size !in 2..20) return false
         val touchX = event.x
@@ -170,27 +172,36 @@ class CircularSelectorView(
 
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-
-                }
-
-                MotionEvent.ACTION_UP -> {
                     val angle = (Math.toDegrees(
                         atan2(
                             touchY - safeRect.centerY(),
                             touchX - safeRect.centerX()
                         ).toDouble()
                     ) + 360) % 360
-
                     val position = (angle / (360 / options.size)).toInt()
                     log("угол = $angle, position = $position")
-                    if (selectedOption >= 0) startDecreasingAnimation(selectedOption)
-                    selectedOption = if (position == selectedOption) -1 else position
-                    if (selectedOption >= 0) startIncreasingAnimation(selectedOption)
-                    return true
+                    val rect = getRectByPosition(position)
+                    return if (isTouchIsInsideArc(touchX, touchY, rect)) {
+                        if (selectedOption >= 0) startDecreasingAnimation(selectedOption)
+                        selectedOption = if (position == selectedOption) -1 else position
+                        if (selectedOption >= 0) startIncreasingAnimation(selectedOption)
+                        true
+                    } else false
+                }
+
+                MotionEvent.ACTION_UP -> {
+
                 }
             }
         }
         return false
+    }
+
+    private fun isTouchIsInsideArc(touchX: Float, touchY: Float, arcRect: Rect): Boolean {
+        val x = touchX - arcRect.centerX()
+        val y = touchY - arcRect.centerY()
+        val radius = (arcRect.right - arcRect.left) / 2
+        return x.toDouble().pow(2) + y.toDouble().pow(2) <= radius.toDouble().pow(2)
     }
 
     private fun getSectorCenterCoordinates(angle: Float, rect: Rect): Pair<Float, Float> {
@@ -272,6 +283,8 @@ class CircularSelectorView(
                 start()
             }
     }
+
+    // TODO save instance state
 
     data class SelectionItem(
         @DrawableRes val image: Int,
