@@ -8,8 +8,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import android.os.Parcel
+import android.os.Parcelable
 import android.util.AttributeSet
-import android.util.Log
 import android.util.TypedValue
 import android.view.MotionEvent
 import android.view.View
@@ -23,6 +24,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.sin
+import kotlin.properties.Delegates
 
 
 class CircularSelectorView(
@@ -77,6 +79,8 @@ class CircularSelectorView(
         }
     }
 
+    // --MEASURING--
+
     private fun updateViewSize() {
         val safeWidth = width - paddingLeft - paddingRight
         val safeHeight = height - paddingTop - paddingBottom
@@ -127,6 +131,8 @@ class CircularSelectorView(
         super.onMeasure(newMeasureSpec, newMeasureSpec)
     }
 
+    // --DRAWING--
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
@@ -165,6 +171,8 @@ class CircularSelectorView(
     private fun getRectByPosition(position: Int): Rect =
         animatedRectMap[position] ?: if (position == selectedOptionId) safeRect else unselectedRect
 
+    // --TOUCH HANDLE--
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent?): Boolean {
         if (event == null || options.size !in 2..20) return false
@@ -198,6 +206,8 @@ class CircularSelectorView(
         } else return false
     }
 
+    // --COMPUTING--
+
     private fun isTouchIsInsideArc(touchX: Float, touchY: Float, arcRect: Rect): Boolean {
         val x = touchX - arcRect.centerX()
         val y = touchY - arcRect.centerY()
@@ -214,6 +224,8 @@ class CircularSelectorView(
         val y = rect.centerY() + (curveCenterY - rect.centerY()) / 2
         return Pair(x.toFloat(), y.toFloat())
     }
+
+    // --ANIMATION--
 
     private fun startIncreasingAnimation(index: Int) {
         if (valueAnimatorsMap.contains(index)) {
@@ -267,6 +279,8 @@ class CircularSelectorView(
             }
     }
 
+    // --CHANGE LISTENER--
+
     interface OnOptionSelectedListener {
         fun invoke(option: SelectionItem?)
     }
@@ -286,26 +300,66 @@ class CircularSelectorView(
         }
     }
 
-    interface AnimatorEndListener: Animator.AnimatorListener {
-        override fun onAnimationCancel(animation: Animator) {}
-        override fun onAnimationRepeat(animation: Animator) {}
-        override fun onAnimationStart(animation: Animator) {}
+    // --STATE SAVING--
+
+    override fun onSaveInstanceState(): Parcelable? {
+        val superState = super.onSaveInstanceState()!!
+        val savedState = SavedState(superState)
+        savedState.selectedOptionId = selectedOptionId
+        return savedState
     }
 
-    private fun ValueAnimator.addEndListener(block:() -> Unit) {
-        this.addListener(object: AnimatorEndListener {
-            override fun onAnimationEnd(animation: Animator) {
-                block.invoke()
+    override fun onRestoreInstanceState(state: Parcelable?) {
+        val savedState = state as SavedState
+        super.onRestoreInstanceState(savedState.superState)
+        selectedOptionId = savedState.selectedOptionId
+    }
+
+    private class SavedState: BaseSavedState {
+
+        var selectedOptionId by Delegates.notNull<Int>()
+
+        constructor(superState: Parcelable) : super(superState)
+        constructor(parcel: Parcel) : super(parcel) {
+            selectedOptionId = parcel.readInt()
+        }
+
+        override fun writeToParcel(out: Parcel, flags: Int) {
+            super.writeToParcel(out, flags)
+            out.writeInt(selectedOptionId)
+        }
+
+        companion object {
+            @JvmField
+            val CREATOR: Parcelable.Creator<SavedState> = object : Parcelable.Creator<SavedState> {
+                override fun createFromParcel(source: Parcel): SavedState = SavedState(source)
+                override fun newArray(size: Int): Array<SavedState?> = Array(size) { null }
             }
-        })
+        }
     }
 
-    // TODO save instance state
+    // --ITEM--
 
     data class SelectionItem(
         @DrawableRes val image: Int,
         @ColorRes val color: Int,
     )
+
+    // --OTHER--
+
+    interface AnimatorEndListener : Animator.AnimatorListener {
+        override fun onAnimationCancel(animation: Animator) {}
+        override fun onAnimationRepeat(animation: Animator) {}
+        override fun onAnimationStart(animation: Animator) {}
+    }
+
+    private fun ValueAnimator.addEndListener(block: () -> Unit) {
+        this.addListener(object : AnimatorEndListener {
+            override fun onAnimationEnd(animation: Animator) {
+                block.invoke()
+            }
+        })
+    }
 
     private fun Float.toDP() = TypedValue.applyDimension(
         TypedValue.COMPLEX_UNIT_DIP,

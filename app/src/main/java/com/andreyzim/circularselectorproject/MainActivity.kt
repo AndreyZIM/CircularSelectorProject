@@ -35,8 +35,8 @@ class MainActivity : AppCompatActivity() {
 
         binding.circularView.addOnOptionSelectedListener {
             val id = this.options.indexOf(it)
-            binding.optionId.text = if(id >= 0) "ID = $id" else "ID = "
-            if(it != null) binding.optionIcon.setImageResource(it.image)
+            binding.optionId.text = if (id >= 0) "ID = $id" else "ID = "
+            if (it != null) binding.optionIcon.setImageResource(it.image)
             else binding.optionIcon.setImageDrawable(null)
         }
     }
