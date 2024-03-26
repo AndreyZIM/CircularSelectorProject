@@ -302,7 +302,7 @@ class CircularSelectorView(
     private fun startIncreasingAnimation(index: Int) {
         if (valueAnimatorsMap.contains(index)) {
             valueAnimatorsMap[index]?.let {
-                if(it.isStarted) it.reverse() else it.start()
+                if (it.isStarted) it.reverse() else it.start()
             }
         }
     }
