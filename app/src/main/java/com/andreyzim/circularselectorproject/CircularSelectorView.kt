@@ -55,6 +55,7 @@ class CircularSelectorView(
         set(value) {
             require(value.size in 2..20) { "Options size must be 2 <= size <= 20" }
             field = value
+            stopAllAnimations()
             cacheDrawables(field)
             populateAnimatedRects(field.size)
             populateAnimators(field.size)
@@ -96,7 +97,6 @@ class CircularSelectorView(
     }
 
     private fun populateAnimators(size: Int) {
-        valueAnimatorsMap.forEach { (_, animator) -> animator.cancel() }
         valueAnimatorsMap.clear()
         repeat(size) { index ->
             val animator =
@@ -115,6 +115,10 @@ class CircularSelectorView(
                 }
             }
         }
+    }
+
+    private fun stopAllAnimations() {
+        valueAnimatorsMap.forEach { (_, animator) -> animator.cancel() }
     }
 
     // --MEASURING--
