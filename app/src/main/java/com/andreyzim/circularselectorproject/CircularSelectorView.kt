@@ -53,6 +53,7 @@ class CircularSelectorView(
     private var cachedDrawables: List<Drawable?> = emptyList()
     var options: List<SelectionItem> = emptyList()
         set(value) {
+            require(value.size in 2..20) { "Options size must be 2 <= size <= 20" }
             field = value
             cacheDrawables(field)
             populateAnimatedRects(field.size)
@@ -233,7 +234,7 @@ class CircularSelectorView(
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent?): Boolean {
-        if (event == null || options.size !in 2..20) return false
+        if (event == null) return false
 
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
