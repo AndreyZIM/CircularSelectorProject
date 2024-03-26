@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.drawable.Drawable
 import android.os.Parcel
 import android.os.Parcelable
 import android.util.AttributeSet
@@ -34,8 +35,13 @@ class CircularSelectorView(
     defStyleRes: Int,
 ) : View(context, attributeSet, defStyleAttr, defStyleRes) {
 
-    private val paint = Paint()
-    private val iconsPaint = Paint()
+    private val sectorsPaint = Paint().apply {
+        style = Paint.Style.FILL
+    }
+    private val iconsPaint = Paint().apply {
+        style = Paint.Style.FILL
+        color = Color.BLACK
+    }
     private val safeRect = Rect()
     private val unselectedRect = Rect()
     private val listeners = mutableListOf<OnOptionSelectedListener>()
@@ -44,9 +50,13 @@ class CircularSelectorView(
             field = value
             invokeListeners(field)
         }
+    private var cachedDrawables: List<Drawable?> = emptyList()
     var options: List<SelectionItem> = emptyList()
         set(value) {
             field = value
+            cacheDrawables(field)
+            populateAnimatedRects(field.size)
+            populateAnimators(field.size)
             invalidate()
         }
     private val animatedRectMap = mutableMapOf<Int, Rect>()
@@ -64,10 +74,6 @@ class CircularSelectorView(
     constructor(context: Context) : this(context, null)
 
     init {
-        paint.style = Paint.Style.FILL
-        iconsPaint.style = Paint.Style.FILL
-        iconsPaint.color = Color.BLACK
-
         if (isInEditMode) {
             options = listOf(
                 SelectionItem(R.drawable.baseline_10k_24, R.color.color4),
@@ -76,6 +82,37 @@ class CircularSelectorView(
                 SelectionItem(R.drawable.baseline_1k_24, R.color.color7),
                 SelectionItem(R.drawable.baseline_app_registration_24, R.color.color8),
             )
+        }
+    }
+
+    private fun cacheDrawables(options: List<SelectionItem>) {
+        cachedDrawables = options.map { ContextCompat.getDrawable(context, it.image) }
+    }
+
+    private fun populateAnimatedRects(size: Int) {
+        animatedRectMap.clear()
+        repeat(size) { index -> animatedRectMap[index] = Rect() }
+    }
+
+    private fun populateAnimators(size: Int) {
+        valueAnimatorsMap.forEach { (_, animator) -> animator.cancel() }
+        valueAnimatorsMap.clear()
+        repeat(size) { index ->
+            val animator =
+                if (index == selectedOptionId) ValueAnimator.ofFloat(SELECTED_ARC_RADIUS_DIFF, 0F)
+                else ValueAnimator.ofFloat(0F, SELECTED_ARC_RADIUS_DIFF)
+
+            valueAnimatorsMap[index] = animator.apply {
+                duration = 300
+                interpolator = animationInterpolator
+                addUpdateListener {
+                    val value = it.animatedValue as Float
+                    animatedRectMap[index]?.increase(value)
+                    invalidate()
+                }
+                addEndListener {
+                }
+            }
         }
     }
 
@@ -107,6 +144,9 @@ class CircularSelectorView(
             unselectedRect.right = safeRect.right - radiusDiff
         }
 
+        animatedRectMap.forEach { (index, rect) ->
+            rect.copyFrom(if (index == selectedOptionId) safeRect else unselectedRect)
+        }
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -141,31 +181,49 @@ class CircularSelectorView(
         val iconSize = ICON_SIZE.toDP()
 
         options.forEachIndexed { index, item ->
-            paint.color = context.getColor(item.color)
             val rect = getRectByPosition(index)
-            canvas.drawArc(
-                rect.left.toFloat(),
-                rect.top.toFloat(),
-                rect.right.toFloat(),
-                rect.bottom.toFloat(),
-                angle * index,
-                angle,
-                true,
-                paint
-            )
-            val sectorCenterAngle = (angle * index) + (angle / 2)
-            val coordinatesPair = getSectorCenterCoordinates(sectorCenterAngle, rect)
-            val drawable = ContextCompat.getDrawable(context, item.image)
-            drawable?.let {
-                it.setBounds(
-                    (coordinatesPair.first - (iconSize / 2)).toInt(),
-                    (coordinatesPair.second - (iconSize / 2)).toInt(),
-                    (coordinatesPair.first + (iconSize / 2)).toInt(),
-                    (coordinatesPair.second + (iconSize / 2)).toInt(),
-                )
-                it.draw(canvas)
-            }
+            drawSector(canvas, index, item, angle, rect)
+            drawSectorDrawable(canvas, angle, index, rect, iconSize)
         }
+    }
+
+    private fun drawSector(
+        canvas: Canvas,
+        index: Int,
+        item: SelectionItem,
+        angle: Float,
+        rect: Rect,
+    ) {
+        sectorsPaint.color = context.getColor(item.color)
+        canvas.drawArc(
+            rect.left.toFloat(),
+            rect.top.toFloat(),
+            rect.right.toFloat(),
+            rect.bottom.toFloat(),
+            angle * index,
+            angle,
+            true,
+            sectorsPaint
+        )
+    }
+
+    private fun drawSectorDrawable(
+        canvas: Canvas,
+        angle: Float,
+        index: Int,
+        rect: Rect,
+        iconSize: Int,
+    ) = cachedDrawables[index].let { drawable ->
+        val sectorCenterAngle = (angle * index) + (angle / 2)
+        val sectorCurveCenterX = getSectorCenterCoordinatesX(sectorCenterAngle, rect)
+        val sectorCurveCenterY = getSectorCenterCoordinatesY(sectorCenterAngle, rect)
+        drawable?.setBounds(
+            (sectorCurveCenterX - (iconSize / 2)).toInt(),
+            (sectorCurveCenterY - (iconSize / 2)).toInt(),
+            (sectorCurveCenterX + (iconSize / 2)).toInt(),
+            (sectorCurveCenterY + (iconSize / 2)).toInt(),
+        )
+        drawable?.draw(canvas)
     }
 
     private fun getRectByPosition(position: Int): Rect =
@@ -189,21 +247,33 @@ class CircularSelectorView(
         val touchX = event.x
         val touchY = event.y
         if (safeRect.contains(touchX.toInt(), touchY.toInt())) {
-            val angle = (Math.toDegrees(
-                atan2(
-                    touchY - safeRect.centerY(),
-                    touchX - safeRect.centerX()
-                ).toDouble()
-            ) + 360) % 360
+            val radians = atan2(
+                touchY - safeRect.centerY(),
+                touchX - safeRect.centerX()
+            ).toDouble()
+            val angle = (Math.toDegrees(radians) + 360) % 360
             val position = (angle / (360 / options.size)).toInt()
             val rect = getRectByPosition(position)
+
             return if (isTouchIsInsideArc(touchX, touchY, rect)) {
-                if (selectedOptionId >= 0) startDecreasingAnimation(selectedOptionId)
-                selectedOptionId = if (position == selectedOptionId) -1 else position
-                if (selectedOptionId >= 0) startIncreasingAnimation(selectedOptionId)
+                if (selectedOptionId >= 0) {
+                    startDecreasingAnimation(selectedOptionId)
+                }
+
+                selectedOptionId =
+                    if (position == selectedOptionId) -1
+                    else position
+
+                if (selectedOptionId >= 0) {
+                    startIncreasingAnimation(selectedOptionId)
+                }
                 true
-            } else false
-        } else return false
+            } else {
+                false
+            }
+        } else {
+            return false
+        }
     }
 
     // --COMPUTING--
@@ -215,68 +285,32 @@ class CircularSelectorView(
         return x.toDouble().pow(2) + y.toDouble().pow(2) <= radius.toDouble().pow(2)
     }
 
-    private fun getSectorCenterCoordinates(angle: Float, rect: Rect): Pair<Float, Float> {
+    private fun getSectorCenterCoordinatesY(angle: Float, rect: Rect): Float {
+        val radius = (rect.right - rect.left) / 2
+        val curveCenterY = rect.centerY() + radius * sin(angle * Math.PI / 180)
+        return (rect.centerY() + (curveCenterY - rect.centerY()) / 2).toFloat()
+    }
+
+    private fun getSectorCenterCoordinatesX(angle: Float, rect: Rect): Float {
         val radius = (rect.right - rect.left) / 2
         val curveCenterX = rect.centerX() + radius * cos(angle * Math.PI / 180)
-        val curveCenterY = rect.centerY() + radius * sin(angle * Math.PI / 180)
-
-        val x = rect.centerX() + (curveCenterX - rect.centerX()) / 2
-        val y = rect.centerY() + (curveCenterY - rect.centerY()) / 2
-        return Pair(x.toFloat(), y.toFloat())
+        return (rect.centerX() + (curveCenterX - rect.centerX()) / 2).toFloat()
     }
 
     // --ANIMATION--
 
     private fun startIncreasingAnimation(index: Int) {
         if (valueAnimatorsMap.contains(index)) {
-            valueAnimatorsMap[index]?.reverse()
-            return
-        }
-        val animatedRect = Rect()
-        animatedRect.copyFrom(unselectedRect)
-        animatedRectMap[index] = animatedRect
-        valueAnimatorsMap[index] = ValueAnimator
-            .ofFloat(0F, SELECTED_ARC_RADIUS_DIFF)
-            .apply {
-                duration = 300
-                interpolator = animationInterpolator
-                addUpdateListener {
-                    val value = it.animatedValue as Float
-                    animatedRectMap[index]?.increase(value)
-                    invalidate()
-                }
-                addEndListener {
-                    animatedRectMap.remove(index)
-                    valueAnimatorsMap.remove(index)
-                }
-                start()
+            valueAnimatorsMap[index]?.let {
+                if(it.isStarted) it.reverse() else it.start()
             }
+        }
     }
 
     private fun startDecreasingAnimation(index: Int) {
         if (valueAnimatorsMap.contains(index)) {
             valueAnimatorsMap[index]?.reverse()
-            return
         }
-        val animatedRect = Rect()
-        animatedRect.copyFrom(unselectedRect)
-        animatedRectMap[index] = animatedRect
-        valueAnimatorsMap[index] = ValueAnimator
-            .ofFloat(SELECTED_ARC_RADIUS_DIFF, 0F)
-            .apply {
-                duration = 300
-                interpolator = animationInterpolator
-                addUpdateListener {
-                    val value = it.animatedValue as Float
-                    animatedRectMap[index]?.increase(value)
-                    invalidate()
-                }
-                addEndListener {
-                    animatedRectMap.remove(index)
-                    valueAnimatorsMap.remove(index)
-                }
-                start()
-            }
     }
 
     // --CHANGE LISTENER--
@@ -315,7 +349,7 @@ class CircularSelectorView(
         selectedOptionId = savedState.selectedOptionId
     }
 
-    private class SavedState: BaseSavedState {
+    private class SavedState : BaseSavedState {
 
         var selectedOptionId by Delegates.notNull<Int>()
 
@@ -353,10 +387,10 @@ class CircularSelectorView(
         override fun onAnimationStart(animation: Animator) {}
     }
 
-    private fun ValueAnimator.addEndListener(block: () -> Unit) {
+    private fun ValueAnimator.addEndListener(block: (Animator) -> Unit) {
         this.addListener(object : AnimatorEndListener {
             override fun onAnimationEnd(animation: Animator) {
-                block.invoke()
+                block.invoke(animation)
             }
         })
     }
